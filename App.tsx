@@ -1,12 +1,23 @@
+import './global.css';
+
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { PostHogProvider } from 'posthog-react-native';
+
+import AppErrorBoundary from './AppErrorBoundary';
+import BLEScanner from './BLEScanner';
+import { posthog } from './telemetry';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <PostHogProvider client={posthog}>
+      <AppErrorBoundary>
+        <View style={styles.container}>
+          <BLEScanner />
+          <StatusBar style="auto" />
+        </View>
+      </AppErrorBoundary>
+    </PostHogProvider>
   );
 }
 
