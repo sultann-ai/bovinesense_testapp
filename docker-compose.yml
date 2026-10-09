@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: bovine_track_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bovine_track
+      POSTGRES_USER: bovine
+      POSTGRES_PASSWORD: bovine_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bovine -d bovine_track"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

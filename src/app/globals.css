@@ -1,26 +1,184 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────
+   BRAND & NEUTRAL TOKENS  (§3 DESIGN.md)
+───────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --bg-app:     #F6F1E9;
+  --bg-surface: #FFFDF9;
+  --bg-sunken:  #EFE8DC;
+  --bg-nav:     #2B2A28;
+
+  /* Borders */
+  --border:     #E6DED1;
+
+  /* Text */
+  --text-primary:   #2B2A28;
+  --text-secondary: #6B655C;
+  --text-on-nav:    #F6F1E9;
+
+  /* Brand */
+  --brand:       #C1502E;
+  --brand-hover: #A8431F;
+  --brand-tint:  #F3E1D9;
+
+  /* Accent */
+  --highlight: #D9A441;
+
+  /* ─── STATUS TOKENS ─── */
+  --status-inside:       #3E7C59;
+  --status-inside-tint:  #E3EFE7;
+
+  --status-near:         #B7791F;
+  --status-near-tint:    #FBF0DC;
+
+  --status-breach:       #B0172E;
+  --status-breach-tint:  #FBE5E8;
+
+  --status-fast:         #6D3FA8;
+  --status-fast-tint:    #EEE6F7;
+
+  --status-stale:        #7A7F87;
+  --status-stale-tint:   #ECEDEF;
+
+  --status-info:         #2F6690;
+  --status-info-tint:    #E2ECF4;
+
+  /* ─── ELEVATION ─── */
+  --shadow-float: 0 4px 16px rgba(43, 42, 40, 0.12);
+
+  /* ─── FONTS (set by next/font in layout.tsx) ─── */
+  --font-ui:   "Inter", "Helvetica World", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
+/* ─────────────────────────────────────────────
+   TAILWIND v4  @theme  (§3 + §4 tokens)
+───────────────────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Backgrounds */
+  --color-bg-app:     var(--bg-app);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-sunken:  var(--bg-sunken);
+  --color-bg-nav:     var(--bg-nav);
+
+  /* Borders */
+  --color-border: var(--border);
+
+  /* Text */
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-on-nav:    var(--text-on-nav);
+
+  /* Brand */
+  --color-brand:       var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-tint:  var(--brand-tint);
+
+  /* Accent */
+  --color-highlight: var(--highlight);
+
+  /* Status — solid */
+  --color-status-inside:  var(--status-inside);
+  --color-status-near:    var(--status-near);
+  --color-status-breach:  var(--status-breach);
+  --color-status-fast:    var(--status-fast);
+  --color-status-stale:   var(--status-stale);
+  --color-status-info:    var(--status-info);
+
+  /* Status — tint */
+  --color-status-inside-tint: var(--status-inside-tint);
+  --color-status-near-tint:   var(--status-near-tint);
+  --color-status-breach-tint: var(--status-breach-tint);
+  --color-status-fast-tint:   var(--status-fast-tint);
+  --color-status-stale-tint:  var(--status-stale-tint);
+  --color-status-info-tint:   var(--status-info-tint);
+
+  /* Font families */
+  --font-ui:   var(--font-inter), "Helvetica World", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  --font-sans: var(--font-ui);
+
+  /* ─── Type scale  §4 ─── */
+  /* font sizes */
+  --text-page-title:    1.5rem;    /* 24px */
+  --text-section-title: 1.125rem; /* 18px */
+  --text-kpi:           2rem;     /* 32px */
+  --text-body:          0.875rem; /* 14px */
+  --text-small:         0.8125rem;/* 13px */
+  --text-label:         0.75rem;  /* 12px */
+  --text-mono:          0.8125rem;/* 13px */
+
+  /* line heights */
+  --leading-page-title:    2rem;    /* 32px */
+  --leading-section-title: 1.625rem;/* 26px */
+  --leading-kpi:           2.25rem; /* 36px */
+  --leading-body:          1.25rem; /* 20px */
+  --leading-small:         1.125rem;/* 18px */
+  --leading-label:         1rem;    /* 16px */
+
+  /* ─── Spacing scale  §4 (4 8 12 16 24 32 48) ─── */
+  --spacing-1: 0.25rem;  /* 4px  */
+  --spacing-2: 0.5rem;   /* 8px  */
+  --spacing-3: 0.75rem;  /* 12px */
+  --spacing-4: 1rem;     /* 16px */
+  --spacing-6: 1.5rem;   /* 24px */
+  --spacing-8: 2rem;     /* 32px */
+  --spacing-12: 3rem;    /* 48px */
+
+  /* ─── Border radius  §4 ─── */
+  --radius-sm:   0.375rem; /* 6px  — inputs, badges, chips */
+  --radius-md:   0.625rem; /* 10px — cards */
+  --radius-lg:   0.875rem; /* 14px — drawers, modals */
+  --radius-full: 9999px;   /* pills, markers */
+
+  /* ─── Shadows  §4 ─── */
+  --shadow-float: var(--shadow-float);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─────────────────────────────────────────────
+   BASE STYLES
+───────────────────────────────────────────── */
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular numbers for anything in a column */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mono utility */
+.font-mono-ids {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Breach pulse animation */
+@keyframes breach-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%       { opacity: 0;   transform: scale(1.6); }
+}
+
+.breach-pulse {
+  animation: breach-pulse 2s ease-out infinite;
 }
