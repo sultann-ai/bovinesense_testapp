@@ -1,15 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/shell/Sidebar";
-import { TopBar } from "@/components/shell/TopBar";
-import { DemoModeBanner } from "@/components/shell/DemoModeBanner";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
 
 const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
@@ -19,30 +10,20 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bovine Track — BOP Dashboard",
-  description: "Bank of Punjab livestock collateral monitoring dashboard",
+  title: "BovineSense",
+  description: "Livestock-collateral monitoring for lenders",
 };
 
+// The root layout is intentionally bare: the signed-in shell (sidebar, top bar) lives in
+// src/app/(app)/layout.tsx and the sign-in pages in src/app/(auth)/layout.tsx.
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${ibmPlexMono.variable} h-full`}>
-      <body className="flex h-full overflow-hidden antialiased">
-        {/* Left rail */}
-        <Sidebar />
-
-        {/* Right column: top bar + demo banner + content */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <TopBar />
-          <DemoModeBanner />
-          <main className="flex-1 overflow-auto p-6">
-            {children}
-          </main>
-        </div>
-      </body>
+    <html lang="en" className={`${ibmPlexMono.variable} h-full`}>
+      <body className="h-full overflow-hidden antialiased">{children}</body>
     </html>
   );
 }

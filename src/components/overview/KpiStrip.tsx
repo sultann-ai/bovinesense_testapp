@@ -1,7 +1,9 @@
 "use client";
 
 import { PawPrint, AlertTriangle, CheckCircle, WifiOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { ErrorState } from "@/components/ui/states";
+import { useTenant } from "@/components/shell/TenantProvider";
 
 export interface KpiData {
   total:        number;
@@ -10,92 +12,79 @@ export interface KpiData {
   breach_count: number;
   stale_count:  number;
   new_alerts:   number;
+  /** Change over the last 24 h; null when it could not be worked out. */
+  delta?:       { total: number; breach_count: number; stale_count: number } | null;
 }
 
 interface Props {
   data: KpiData | null;
   loading?: boolean;
+  /** Set when the numbers could not be loaded. */
+  onRetry?: () => void;
+  /** The animal status the map and feed are filtered to, if any. */
+  activeStatus?: string | null;
+  /** Clicking a card filters the map and the feed to that status; clicking the applied one clears it. */
+  onSelectStatus?: (status: string | null) => void;
 }
 
-export function KpiStrip({ data, loading }: Props) {
-  const cards = [
-    {
-      label: "Animals Tracked",
-      value: loading ? "—" : String(data?.total ?? 0),
-      sub:   loading ? "" : "tags active",
-      icon:  PawPrint,
-      breach: false,
-    },
-    {
-      label: "Inside Boundary",
-      value: loading ? "—" : `${data?.inside_pct ?? 0}%`,
-      sub:   loading ? "" : `${data?.inside_count ?? 0} of ${data?.total ?? 0}`,
-      icon:  CheckCircle,
-      breach: false,
-    },
-    {
-      label: "Active Breaches",
-      value: loading ? "—" : String(data?.breach_count ?? 0),
-      sub:   loading ? "" : "open alerts",
-      icon:  AlertTriangle,
-      breach: (data?.breach_count ?? 0) > 0,
-    },
-    {
-      label: "Offline Tags",
-      value: loading ? "—" : String(data?.stale_count ?? 0),
-      sub:   loading ? "" : "no fix > 6 h",
-      icon:  WifiOff,
-      breach: false,
-    },
-  ];
+/** The four numbers across the top of the Overview, as KPI cards. */
+export function KpiStrip({ data, loading = false, onRetry, activeStatus = null, onSelectStatus }: Props) {
+  const { offlineThresholdHours } = useTenant();
+
+  if (!loading && data === null && onRetry) {
+    return <ErrorState className="border-b border-border py-6" what="The summary numbers could not be loaded." onRetry={onRetry} />;
+  }
+
+  const breaches = data?.breach_count ?? 0;
+  const d = data?.delta;
+  const select = (status: string | null) => (onSelectStatus ? () => onSelectStatus(status !== null && status === activeStatus ? null : status) : undefined);
 
   return (
-    <div
-      className="grid grid-cols-4 gap-px border-b"
-      style={{ borderColor: "var(--border)", backgroundColor: "var(--border)" }}
-    >
-      {cards.map((card) => (
-        <div
-          key={card.label}
-          className="relative flex flex-col justify-center bg-bg-surface px-6"
-          style={{ height: "96px" }}
-        >
-          {card.breach && (
-            <div
-              className="absolute top-0 left-0 right-0 h-[3px] rounded-t"
-              style={{ backgroundColor: "var(--status-breach)" }}
-            />
-          )}
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-[0.04em] text-text-secondary mb-1.5">
-                {card.label}
-              </div>
-              <div
-                className={cn(
-                  "text-[2rem] font-semibold tabular-nums leading-none",
-                  card.breach ? "text-status-breach" : "text-text-primary",
-                  loading && "opacity-40",
-                )}
-              >
-                {card.value}
-              </div>
-            </div>
-            <card.icon
-              size={18}
-              strokeWidth={1.5}
-              className="mt-0.5 shrink-0"
-              style={{ color: card.breach ? "var(--status-breach)" : "var(--text-secondary)" }}
-            />
-          </div>
-          <div
-            className="mt-1.5 text-xs"
-            style={{ color: card.breach ? "var(--status-breach)" : "var(--text-secondary)" }}
-          >
-            {card.sub}
-          </div>
-        </div>
-      ))}
+    <div className="grid grid-cols-4 gap-4 border-b border-border bg-bg-app p-4" aria-label="Summary">
+      <KpiCard
+        label="Animals monitored"
+        value={String(data?.total ?? 0)}
+        caption="tags active"
+        icon={PawPrint}
+        tone="brand"
+        delta={d ? { value: d.total, upIsGood: true } : undefined}
+        loading={loading}
+        onClick={select(null)}
+      />
+      <KpiCard
+        label="Inside boundary"
+        value={`${data?.inside_pct ?? 0}%`}
+        caption={`${data?.inside_count ?? 0} of ${data?.total ?? 0}`}
+        icon={CheckCircle}
+        tone="inside"
+        delta={data ? null : undefined}
+        loading={loading}
+        active={activeStatus === "inside"}
+        onClick={select("inside")}
+      />
+      <KpiCard
+        label="Active breaches"
+        value={String(breaches)}
+        caption="animals outside"
+        icon={AlertTriangle}
+        tone="breach"
+        alert={breaches > 0}
+        delta={d ? { value: d.breach_count, upIsGood: false } : undefined}
+        loading={loading}
+        active={activeStatus === "breach"}
+        onClick={select("breach")}
+      />
+      <KpiCard
+        label="Offline tags"
+        value={String(data?.stale_count ?? 0)}
+        caption={`no fix > ${offlineThresholdHours} h`}
+        icon={WifiOff}
+        tone="stale"
+        delta={d ? { value: d.stale_count, upIsGood: false } : undefined}
+        loading={loading}
+        active={activeStatus === "stale"}
+        onClick={select("stale")}
+      />
     </div>
   );
 }

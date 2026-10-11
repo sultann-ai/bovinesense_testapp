@@ -1,74 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { requireApiAccess, scopeMatch } from "@/lib/auth/api";
+import { intParam } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireApiAccess();
+  if (!auth.ok) return auth.response;
+  const { ctx } = auth;
+
   const { searchParams } = req.nextUrl;
-  const regionId = searchParams.get("region_id");
-  const branchId = searchParams.get("branch_id");
+  // Optional narrowing filters; the caller's scope is always applied first.
+  const regionId = intParam(searchParams.get("region_id"));
+  const branchId = intParam(searchParams.get("branch_id"));
+
+  if (Number.isNaN(regionId) || Number.isNaN(branchId)) {
+    return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
+  }
 
   try {
-    const rows = await sql`
-      SELECT
-        a.id,
-        a.name        AS animal_name,
-        a.status,
-        t.serial_number                                 AS tag_serial,
-        bo.name                                         AS borrower_name,
-        l.loan_number,
-        br.id                                           AS branch_id,
-        br.name                                         AS branch_name,
-        r.id                                            AS region_id,
-        r.name                                          AS region_name,
-        f.lat,
-        f.lon,
-        f.fixed_at,
-        f.battery_pct,
-        f.speed_kmh,
-        EXISTS (
-          SELECT 1 FROM alerts al
-          WHERE  al.animal_id = a.id
-            AND  al.type      = 'breach'
-            AND  al.status    = 'new'
-        ) AS has_unack_breach
-      FROM   animals a
-      LEFT JOIN tags      t   ON t.id   = a.tag_id
-      LEFT JOIN borrowers bo  ON bo.id  = a.borrower_id
-      LEFT JOIN loans     l   ON l.id   = a.loan_id
-      JOIN      branches  br  ON br.id  = a.branch_id
-      LEFT JOIN regions   r   ON r.id   = br.region_id
-      LEFT JOIN LATERAL (
-        SELECT lat, lon, fixed_at, battery_pct, speed_kmh
-        FROM   fixes
-        WHERE  animal_id = a.id
-        ORDER  BY fixed_at DESC
-        LIMIT  1
-      ) f ON true
-      WHERE  (${regionId}::int IS NULL OR r.id = ${regionId}::int)
-        AND  (${branchId}::int IS NULL OR br.id = ${branchId}::int)
-        AND  f.lat IS NOT NULL
-    `;
+    let query = ctx.db
+      .from("animal_overview")
+      .select(
+        "id, animal_name, status, tag_serial, borrower_name, loan_number, branch_id, branch_name, region_id, lat, lon, last_fix_at, battery_pct, speed_kmh, has_unack_breach",
+      )
+      .match(scopeMatch(ctx))
+      .not("lat", "is", null);
+
+    if (regionId !== null) query = query.eq("region_id", regionId);
+    if (branchId !== null) query = query.eq("branch_id", branchId);
+
+    // Supabase caps a single response at max_rows (default 1000). Fleets larger than
+    // that need paging or server-side clustering — see README "Limits".
+    const { data, error } = await query.limit(1000);
+    if (error) throw error;
 
     const geojson = {
       type: "FeatureCollection" as const,
-      features: rows.map((r) => ({
+      features: data.map((r) => ({
         type: "Feature" as const,
         id: r.id,
         geometry: { type: "Point" as const, coordinates: [r.lon, r.lat] },
         properties: {
-          id:              r.id,
-          animal_name:     r.animal_name,
-          status:          r.status,
-          tag_serial:      r.tag_serial,
-          borrower_name:   r.borrower_name,
-          loan_number:     r.loan_number,
-          branch_id:       r.branch_id,
-          branch_name:     r.branch_name,
-          region_id:       r.region_id,
-          fixed_at:        r.fixed_at,
-          battery_pct:     r.battery_pct,
-          speed_kmh:       r.speed_kmh,
+          id:               r.id,
+          animal_name:      r.animal_name,
+          status:           r.status,
+          tag_serial:       r.tag_serial,
+          borrower_name:    r.borrower_name,
+          loan_number:      r.loan_number,
+          branch_id:        r.branch_id,
+          branch_name:      r.branch_name,
+          region_id:        r.region_id,
+          fixed_at:         r.last_fix_at,
+          battery_pct:      r.battery_pct,
+          speed_kmh:        r.speed_kmh,
           has_unack_breach: r.has_unack_breach,
         },
       })),

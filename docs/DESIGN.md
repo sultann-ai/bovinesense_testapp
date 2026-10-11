@@ -1,5 +1,7 @@
 # Bovine Track — BOP Dashboard Design Language
 
+> **Note:** the colour palette and left-rail treatment described below were superseded by the current light theme. The authoritative colour tokens are in `src/app/globals.css`; the text and layout guidance still applies.
+
 Oct 8, 2026 · @Muhammad
 
 ## 1. The reframe: the bank buys collateral visibility, not a map
@@ -188,7 +190,7 @@ Each fence has a name, a type, a warning buffer (default 500 m inward), and the 
 1. **New**: appears in the feed, bell count and a toast; marker pulses.
 2. **Acknowledged**: someone has seen it; pulse stops.
 3. **Assigned**: routed to the responsible branch officer, who gets an SMS.
-4. **Resolved**: closed with a required reason (returned home, false alarm, moved with bank consent, escalated to recovery) and an optional note.
+4. **Resolved**: closed with a required reason (returned home, false alarm, moved with consent, escalated to recovery) and an optional note.
 
 Never auto-close a breach when the animal returns; raise a "Returned" event and leave the breach for a human to resolve. Banks need the audit trail.
 

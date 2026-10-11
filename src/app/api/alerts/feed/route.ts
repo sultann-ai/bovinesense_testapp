@@ -1,57 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { requireApiAccess, scopeMatch } from "@/lib/auth/api";
+import { Constants } from "@/types/database";
+import { enumParam, intParam } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireApiAccess();
+  if (!auth.ok) return auth.response;
+  const { ctx } = auth;
+
   const { searchParams } = req.nextUrl;
-  const regionId = searchParams.get("region_id");
-  const branchId = searchParams.get("branch_id");
-  const status   = searchParams.get("status");       // 'new' | 'acknowledged' | 'assigned' | 'resolved'
-  const typeFilter = searchParams.get("type");
+  // Optional narrowing filters. They can only shrink the result: the caller's
+  // organization / region / branch scope is always applied first.
+  const regionId   = intParam(searchParams.get("region_id"));
+  const branchId   = intParam(searchParams.get("branch_id"));
+  const status     = enumParam(searchParams.get("status"), Constants.public.Enums.alert_status);
+  const typeFilter = enumParam(searchParams.get("type"), Constants.public.Enums.alert_type);
+
+  if (Number.isNaN(regionId) || Number.isNaN(branchId) || !status.ok || !typeFilter.ok) {
+    return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
+  }
 
   try {
-    const rows = await sql`
-      SELECT
-        al.id,
-        al.type,
-        al.severity,
-        al.status,
-        al.title,
-        al.detail,
-        al.distance_km,
-        al.created_at,
-        al.acknowledged_at,
-        al.assigned_at,
-        al.resolved_at,
-        al.resolution_reason,
-        a.id         AS animal_id,
-        a.name       AS animal_name,
-        a.status     AS animal_status,
-        t.serial_number  AS tag_serial,
-        bo.name      AS borrower_name,
-        l.loan_number,
-        br.id        AS branch_id,
-        br.name      AS branch_name,
-        r.id         AS region_id,
-        r.name       AS region_name
-      FROM   alerts   al
-      JOIN   animals  a   ON a.id   = al.animal_id
-      LEFT JOIN tags  t   ON t.id   = al.tag_id
-      LEFT JOIN borrowers bo ON bo.id = a.borrower_id
-      LEFT JOIN loans     l  ON l.id  = a.loan_id
-      JOIN   branches br  ON br.id  = a.branch_id
-      LEFT JOIN regions r  ON r.id  = br.region_id
-      WHERE  (${regionId}::int IS NULL OR r.id  = ${regionId}::int)
-        AND  (${branchId}::int IS NULL OR br.id = ${branchId}::int)
-        AND  (${status}  IS NULL OR al.status = ${status}::alert_status)
-        AND  (${typeFilter} IS NULL OR al.type = ${typeFilter}::alert_type)
-        AND  al.status != 'resolved'
-      ORDER  BY al.created_at DESC
-      LIMIT  100
-    `;
+    let query = ctx.db
+      .from("alert_overview")
+      .select(
+        "id, type, severity, status, title, detail, distance_km, created_at, acknowledged_at, assigned_at, resolved_at, resolution_reason, animal_id, animal_name, animal_status, tag_serial, borrower_name, loan_number, branch_id, branch_name, region_id, region_name",
+      )
+      .match(scopeMatch(ctx))
+      .neq("status", "resolved");
 
-    return NextResponse.json(rows);
+    if (regionId !== null)   query = query.eq("region_id", regionId);
+    if (branchId !== null)   query = query.eq("branch_id", branchId);
+    if (status.value)        query = query.eq("status", status.value);
+    if (typeFilter.value)    query = query.eq("type", typeFilter.value);
+
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[api/alerts/feed]", err);
     return NextResponse.json([], { status: 503 });

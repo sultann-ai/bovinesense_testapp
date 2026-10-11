@@ -1,22 +1,24 @@
-"use client";
-
 import { FlaskConical } from "lucide-react";
 
-export function DemoModeBanner() {
+/**
+ * A slim strip with a gold left border under the top bar (DESIGN.md §8). It protects credibility when someone
+ * asks how many tags are real, so it is shown whenever the organization's demo_mode setting is on.
+ * The message is built from the organization's own tag counts (see demoBannerMessage), or is the
+ * custom text in settings.demo_banner; nothing about it is hardcoded.
+ */
+export function DemoModeBanner({ message }: { message: string }) {
   return (
     <div
-      className="flex items-center justify-center gap-2 border-b px-4 py-2 text-xs font-medium"
+      role="note"
+      data-testid="demo-banner"
+      className="flex items-center gap-2 border-b border-l-4 border-border px-4 py-1 text-xs font-medium leading-4 text-text-primary"
       style={{
-        backgroundColor: "color-mix(in srgb, var(--highlight) 12%, var(--bg-surface))",
-        borderColor: "color-mix(in srgb, var(--highlight) 40%, transparent)",
-        color: "var(--text-primary)",
+        backgroundColor: "var(--bg-surface)",
+        borderLeftColor: "var(--highlight)",
       }}
     >
-      <FlaskConical size={13} style={{ color: "var(--highlight)" }} />
-      <span>
-        Demo environment:{" "}
-        <span className="font-semibold">1 live tag</span>, 240 simulated animals.
-      </span>
+      <FlaskConical size={14} strokeWidth={1.5} aria-hidden className="text-text-secondary" />
+      <span>{message}</span>
     </div>
   );
 }

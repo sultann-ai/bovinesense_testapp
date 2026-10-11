@@ -5,51 +5,63 @@
 ───────────────────────────────────────────── */
 :root {
   /* Backgrounds */
+  /* Light, white-dominant theme: a cream page, and white for every card, table, modal, sidebar and
+     header, and the left rail. Charcoal is for text, never a surface. */
   --bg-app:     #F6F1E9;
-  --bg-surface: #FFFDF9;
-  --bg-sunken:  #EFE8DC;
-  --bg-nav:     #2B2A28;
+  --bg-surface: #FFFFFF;
+  --bg-sunken:  #FAF7F2; /* inputs, table headers, hover rows: a barely-there cream */
+  --bg-nav:     #FFFFFF; /* the left rail is white too */
 
-  /* Borders */
-  --border:     #E6DED1;
+  /* Borders: 1 px hairlines */
+  --border:     #E7DFD1;
 
-  /* Text */
+  /* Text (at least 4.5:1 on white and on the cream page) */
   --text-primary:   #2B2A28;
-  --text-secondary: #6B655C;
-  --text-on-nav:    #F6F1E9;
+  --text-secondary: #6B665F;
+  --text-on-nav:    #2B2A28; /* charcoal text and icons on the rail */
 
-  /* Brand */
+  /* Brand terracotta: primary buttons, the active-nav indicator, links and focus rings. Never a large fill. */
   --brand:       #C1502E;
-  --brand-hover: #A8431F;
-  --brand-tint:  #F3E1D9;
+  --brand-hover: #A8442A;
+  --brand-tint:  #F9ECE6;
 
   /* Accent */
   --highlight: #D9A441;
 
+  /* ─── MAP (§3 "Map palette"; the basemap itself is styled in Google Cloud: docs/MAP_STYLE.md) ─── */
+  --map-boundary:    #B9AE9C; /* district boundaries, dashed */
+  --map-pin-outline: #FFFFFF; /* the 2 px outline around every pin and cluster */
+
   /* ─── STATUS TOKENS ─── */
-  --status-inside:       #3E7C59;
-  --status-inside-tint:  #E3EFE7;
+  /* Each status has a fill colour (pins, bars, dots) and, where the fill is too light to read as text,
+     a -text variant that keeps 4.5:1 on white and on its tint. Status is never terracotta. */
+  --status-inside:       #3F8F6B; /* success */
+  --status-inside-text:  #2D6B4E;
+  --status-inside-tint:  #E5F2EB;
 
-  --status-near:         #B7791F;
-  --status-near-tint:    #FBF0DC;
+  --status-near:         #C98A1B; /* warning (amber) */
+  --status-near-text:    #8A5A0B;
+  --status-near-tint:    #FBF1DC;
 
-  --status-breach:       #B0172E;
-  --status-breach-tint:  #FBE5E8;
+  --status-breach:       #B42318; /* danger */
+  --status-breach-tint:  #FDECEA;
 
   --status-fast:         #6D3FA8;
   --status-fast-tint:    #EEE6F7;
 
   --status-stale:        #7A7F87;
+  --status-stale-text:   #5F646B;
   --status-stale-tint:   #ECEDEF;
 
   --status-info:         #2F6690;
   --status-info-tint:    #E2ECF4;
 
   /* ─── ELEVATION ─── */
-  --shadow-float: 0 4px 16px rgba(43, 42, 40, 0.12);
+  /* Cards are flat. Only things floating over the map or the page get this very soft shadow. */
+  --shadow-float: 0 2px 8px rgba(43, 42, 40, 0.08);
 
-  /* ─── FONTS (set by next/font in layout.tsx) ─── */
-  --font-ui:   "Inter", "Helvetica World", "Helvetica Neue", Arial, sans-serif;
+  /* ─── FONTS ─── */
+  --font-ui:   "Helvetica World", Helvetica, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
@@ -81,6 +93,9 @@
 
   /* Status — solid */
   --color-status-inside:  var(--status-inside);
+  --color-status-inside-text: var(--status-inside-text);
+  --color-status-near-text:   var(--status-near-text);
+  --color-status-stale-text:  var(--status-stale-text);
   --color-status-near:    var(--status-near);
   --color-status-breach:  var(--status-breach);
   --color-status-fast:    var(--status-fast);
@@ -96,7 +111,7 @@
   --color-status-info-tint:   var(--status-info-tint);
 
   /* Font families */
-  --font-ui:   var(--font-inter), "Helvetica World", "Helvetica Neue", Arial, sans-serif;
+  --font-ui:   "Helvetica World", Helvetica, "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
   --font-sans: var(--font-ui);
 
@@ -140,6 +155,22 @@
 /* ─────────────────────────────────────────────
    BASE STYLES
 ───────────────────────────────────────────── */
+/* Helvetica World is a licensed font and is not bundled. It is used when installed on the device, or when
+   you add the files below (public/fonts/HelveticaWorld-Regular.woff2 and -Bold.woff2). Otherwise the
+   browser uses Helvetica or Arial, as listed in --font-ui. */
+@font-face {
+  font-family: "Helvetica World";
+  font-weight: 400;
+  font-display: swap;
+  src: local("Helvetica World"), local("HelveticaWorld-Regular"), url("/fonts/HelveticaWorld-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Helvetica World";
+  font-weight: 700;
+  font-display: swap;
+  src: local("Helvetica World Bold"), local("HelveticaWorld-Bold"), url("/fonts/HelveticaWorld-Bold.woff2") format("woff2");
+}
+
 html {
   height: 100%;
 }
@@ -181,4 +212,149 @@ body {
 
 .breach-pulse {
   animation: breach-pulse 2s ease-out infinite;
+}
+
+/* ─────────────────────────────────────────────
+   MAP PINS, CLUSTERS, LABELS, TRAIL  (§6 DESIGN.md)
+   Built as DOM by src/components/map/dom.ts and placed by Google's AdvancedMarkerElement.
+   Colours come from tokens only.
+───────────────────────────────────────────── */
+.bs-pin {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  transition: transform 150ms ease-out;
+}
+.bs-pin[data-status="inside"] { --pin-fill: var(--status-inside); }
+.bs-pin[data-status="near"]   { --pin-fill: var(--status-near); }
+.bs-pin[data-status="breach"] { --pin-fill: var(--status-breach); }
+.bs-pin[data-status="fast"]   { --pin-fill: var(--status-fast); }
+.bs-pin[data-status="stale"]  { --pin-fill: var(--status-stale); }
+.bs-pin__disc {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--map-pin-outline);
+  border-radius: var(--radius-full);
+  background: var(--pin-fill, var(--status-stale));
+  color: var(--map-pin-outline);
+}
+.bs-pin__disc svg { width: 16px; height: 16px; }
+/* Selected: gold 3 px outer ring and 1.15x. */
+.bs-pin[data-selected="true"] { transform: scale(1.15); }
+.bs-pin__ring {
+  position: absolute;
+  inset: -5px;
+  display: none;
+  pointer-events: none;
+  border: 3px solid var(--highlight);
+  border-radius: var(--radius-full);
+}
+.bs-pin[data-selected="true"] .bs-pin__ring { display: block; }
+/* An unacknowledged breach: the slow pulse ring (the product's one looping animation). */
+.bs-pin__pulse {
+  position: absolute;
+  inset: -6px;
+  display: none;
+  pointer-events: none;
+  border-radius: var(--radius-full);
+  background: var(--status-breach);
+  opacity: 0.3;
+}
+.bs-pin[data-pulse="true"] .bs-pin__pulse { display: block; animation: breach-pulse 2s ease-out infinite; }
+/* Stale: grey at 60% with a clock badge, so an old position never looks current. */
+.bs-pin[data-stale="true"] .bs-pin__disc { opacity: 0.6; }
+.bs-pin__clock {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--map-pin-outline);
+  border-radius: var(--radius-full);
+  background: var(--status-stale);
+  color: var(--map-pin-outline);
+}
+.bs-pin__clock svg { width: 8px; height: 8px; }
+.bs-pin[data-stale="true"] .bs-pin__clock { display: flex; }
+
+/* A cluster: a count; with any breach, a crimson outer ring and a badge with the breach count. */
+.bs-cluster {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--map-pin-outline);
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+  color: var(--map-pin-outline);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.bs-cluster[data-breach="true"] { box-shadow: 0 0 0 3px var(--status-breach), var(--shadow-float); }
+.bs-cluster__badge {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 2px solid var(--map-pin-outline);
+  border-radius: var(--radius-full);
+  background: var(--status-breach);
+  color: var(--map-pin-outline);
+  font-size: 10px;
+  font-weight: 700;
+}
+.bs-cluster__badge svg { width: 10px; height: 10px; }
+.bs-cluster[data-breach="true"] .bs-cluster__badge { display: flex; }
+
+/* District name, shown from zoom 8. */
+.bs-district-label {
+  pointer-events: none;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-secondary);
+  text-shadow: 0 0 3px var(--bg-app), 0 0 3px var(--bg-app), 0 0 3px var(--bg-app);
+  white-space: nowrap;
+}
+
+/* The trail: a dot per fix, and the playhead. */
+.bs-trail-dot {
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--map-pin-outline);
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+  cursor: default;
+}
+.bs-trail-dot[data-passed="false"] { opacity: 0.4; }
+.bs-trail-head {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--highlight);
+  border-radius: var(--radius-full);
+  background: var(--map-pin-outline);
+  box-shadow: var(--shadow-float);
 }

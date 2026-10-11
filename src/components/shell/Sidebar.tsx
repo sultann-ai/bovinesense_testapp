@@ -16,10 +16,13 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "./PermissionsProvider";
+import { BrandMark } from "./BrandMark";
+import { useLive } from "@/components/realtime/RealtimeProvider";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Overview",         icon: LayoutDashboard },
-  { href: "/alerts",     label: "Alerts",            icon: Bell,            badge: 3 },
+  { href: "/alerts",     label: "Alerts",            icon: Bell },
   { href: "/animals",    label: "Animals",           icon: PawPrint },
   { href: "/borrowers",  label: "Borrowers",         icon: Users },
   { href: "/geofences",  label: "Geofences",         icon: MapPin },
@@ -43,10 +46,14 @@ function NavItem({ href, label, icon: Icon, badge, collapsed, active }: NavItemP
     <Link
       href={href}
       title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150",
-        "text-text-on-nav/70 hover:bg-white/10 hover:text-text-on-nav",
-        active && "bg-brand text-white hover:bg-brand-hover",
+        "text-text-secondary hover:bg-bg-sunken hover:text-text-primary",
+        // Active: a soft terracotta tint and a terracotta bar on the rail's left edge.
+        active && "bg-brand-tint text-brand-hover hover:bg-brand-tint hover:text-brand-hover",
+        active && "before:absolute before:inset-y-1.5 before:-left-2 before:w-[3px] before:rounded-r-full before:bg-brand",
         collapsed && "justify-center px-0"
       )}
     >
@@ -60,7 +67,7 @@ function NavItem({ href, label, icon: Icon, badge, collapsed, active }: NavItemP
         <span
           className={cn(
             "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-            active ? "bg-white/25 text-white" : "bg-status-breach text-white"
+            "bg-status-breach text-white"
           )}
         >
           {badge}
@@ -77,36 +84,31 @@ function NavItem({ href, label, icon: Icon, badge, collapsed, active }: NavItemP
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const { can } = usePermissions();
+  const { newAlertCount } = useLive();
 
   const width = collapsed ? "w-[72px]" : "w-[240px]";
 
   return (
     <aside
+      aria-label="Main navigation"
+      data-collapsed={collapsed}
       className={cn(
         "relative flex flex-col shrink-0 bg-bg-nav transition-[width] duration-200 ease-out",
-        "border-r border-white/8",
+        "border-r border-border",
         width
       )}
     >
       {/* Logo area */}
       <div className={cn(
-        "flex h-16 items-center border-b border-white/8 px-4 shrink-0",
+        "flex h-16 items-center border-b border-border px-4 shrink-0",
         collapsed && "justify-center px-0"
       )}>
         {collapsed ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white text-sm font-bold">
-            B
-          </div>
+          <BrandMark variant="insignia" height={32} />
         ) : (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white text-sm font-bold shrink-0">
-              B
-            </div>
-            <div className="leading-tight">
-              <div className="text-text-on-nav font-semibold text-sm">BOP</div>
-              <div className="text-text-on-nav/50 text-[10px]">Bovine Track</div>
-            </div>
-          </div>
+          // The wordmark alone, never beside the icon.
+          <BrandMark variant="logo" height={24} />
         )}
       </div>
 
@@ -116,20 +118,23 @@ export function Sidebar() {
           <NavItem
             key={item.href}
             {...item}
+            badge={item.href === "/alerts" ? newAlertCount : undefined}
             collapsed={collapsed}
             active={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
           />
         ))}
       </nav>
 
-      {/* Settings pinned bottom */}
-      <div className="border-t border-white/8 px-2 py-3">
-        <NavItem
-          {...SETTINGS_ITEM}
-          collapsed={collapsed}
-          active={pathname.startsWith("/settings")}
-        />
-      </div>
+      {/* Settings pinned bottom: organization admins only */}
+      {can("settings:manage") && (
+        <div className="border-t border-border px-2 py-3">
+          <NavItem
+            {...SETTINGS_ITEM}
+            collapsed={collapsed}
+            active={pathname.startsWith("/settings")}
+          />
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <button
@@ -140,6 +145,7 @@ export function Sidebar() {
           "shadow-sm hover:text-text-primary transition-colors"
         )}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!collapsed}
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>

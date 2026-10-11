@@ -1,185 +1,110 @@
 "use client";
 
-import { ShieldAlert, Truck, WifiOff, Battery, Info, CheckCircle, ArrowRight, MapPin } from "lucide-react";
-import { formatRelativeTime, formatAbsoluteTime } from "@/lib/format";
+import { CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AlertFeedItem, type FeedAlert } from "@/components/ui/alert-feed-item";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
+import { usePermissions } from "@/components/shell/PermissionsProvider";
 
-export interface AlertRow {
-  id:              number;
-  type:            string;
-  severity:        string;
-  status:          string;
-  title:           string;
-  detail:          string | null;
-  distance_km:     number | null;
-  created_at:      string;
-  animal_id:       number;
-  animal_name:     string | null;
-  tag_serial:      string | null;
-  borrower_name:   string | null;
-  loan_number:     string | null;
-  branch_name:     string;
+export interface AlertRow extends FeedAlert {
+  severity:    string;
+  distance_km: number | null;
+  animal_name: string | null;
 }
 
 interface Props {
   alerts:          AlertRow[];
   loading:         boolean;
+  /** Set when the feed could not be loaded. */
+  failed?:         boolean;
+  onRetry?:        () => void;
+  /** How many alerts the panel lists (after the "Unacknowledged only" toggle). */
   total:           number;
+  /** Show only alerts nobody has acknowledged yet. */
+  unackOnly:       boolean;
+  onUnackOnlyChange: (on: boolean) => void;
   selectedId:      number | null;
   onSelectAnimal:  (id: number) => void;
   onAcknowledge:   (id: number) => void;
   onFlyTo:         (animalId: number) => void;
+  onAssign:        (alertId: number) => void;
+  onResolve:       (alertId: number) => void;
 }
 
-const SEV: Record<string, { bar: string; icon: typeof ShieldAlert }> = {
-  breach:        { bar: "var(--status-breach)", icon: ShieldAlert },
-  near_boundary: { bar: "var(--status-near)",   icon: ShieldAlert },
-  fast_movement: { bar: "var(--status-fast)",   icon: Truck },
-  tag_offline:   { bar: "var(--status-stale)",  icon: WifiOff },
-  low_battery:   { bar: "var(--status-info)",   icon: Battery },
-  returned:      { bar: "var(--status-info)",   icon: CheckCircle },
-};
-
-function AlertCard({ alert, selectedAnimalId, onSelectAnimal, onAcknowledge, onFlyTo }: {
-  alert:           AlertRow;
-  selectedAnimalId: number | null;
-  onSelectAnimal:  (id: number) => void;
-  onAcknowledge:   (id: number) => void;
-  onFlyTo:         (animalId: number) => void;
-}) {
-  const s = SEV[alert.type] ?? SEV.returned;
-  const isSelected = selectedAnimalId === alert.animal_id;
-  const isNew = alert.status === "new";
+/** The live alert panel (360 px): the newest open alerts, as feed items. */
+export function AlertFeed({ alerts, loading, failed = false, onRetry, total, unackOnly, onUnackOnlyChange, selectedId, onSelectAnimal, onAcknowledge, onFlyTo, onAssign, onResolve }: Props) {
+  const { can } = usePermissions();
+  const canAcknowledge = can("alerts:acknowledge");
+  const canAssign = can("alerts:assign");
+  const canResolve = can("alerts:resolve");
 
   return (
-    <div
-      className={cn(
-        "relative flex cursor-pointer gap-0 border-b transition-colors",
-        isSelected ? "bg-brand-tint" : "bg-bg-surface hover:bg-bg-sunken",
-      )}
-      style={{ borderColor: "var(--border)" }}
-      onClick={() => onSelectAnimal(alert.animal_id)}
-    >
-      {/* 4px severity bar */}
-      <div className="w-1 shrink-0" style={{ backgroundColor: s.bar }} />
-
-      {/* Unread dot */}
-      {isNew && (
-        <div
-          className="absolute right-3 top-3 h-2 w-2 rounded-full"
-          style={{ backgroundColor: s.bar }}
-        />
-      )}
-
-      <div className="flex-1 min-w-0 p-3">
-        <div className="flex items-start justify-between gap-2 mb-0.5">
-          <span className="text-sm font-semibold text-text-primary leading-tight pr-4">
-            {alert.title}
-          </span>
-          <time
-            className="text-[11px] text-text-secondary whitespace-nowrap shrink-0"
-            title={formatAbsoluteTime(alert.created_at)}
-          >
-            {formatRelativeTime(alert.created_at)}
-          </time>
-        </div>
-
-        <div className="font-mono-ids text-[11px] text-text-secondary mb-0.5 truncate">
-          {alert.tag_serial ?? "—"} · {alert.borrower_name ?? "—"} · {alert.loan_number ?? "—"}
-        </div>
-
-        <div className="text-[11px] text-text-secondary truncate">
-          {alert.branch_name}
-          {alert.detail && ` · ${alert.detail}`}
-        </div>
-
-        {/* Actions */}
-        <div className="mt-2 flex items-center gap-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); onFlyTo(alert.animal_id); }}
-            className="flex items-center gap-1 text-[11px] font-medium transition-colors"
-            style={{ color: "var(--brand)" }}
-          >
-            <MapPin size={10} strokeWidth={2} />
-            View on map
-          </button>
-
-          {isNew && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onAcknowledge(alert.id); }}
-              className="flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors"
-            >
-              <CheckCircle size={10} strokeWidth={2} />
-              Acknowledge
-            </button>
-          )}
-
-          <button
-            onClick={(e) => { e.stopPropagation(); onSelectAnimal(alert.animal_id); }}
-            className="flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors"
-          >
-            <ArrowRight size={10} strokeWidth={2} />
-            Open
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function AlertFeed({
-  alerts, loading, total,
-  selectedId, onSelectAnimal, onAcknowledge, onFlyTo,
-}: Props) {
-  return (
-    <div
-      className="flex w-[360px] shrink-0 flex-col border-l overflow-hidden"
-      style={{ borderColor: "var(--border)" }}
-    >
-      {/* Header */}
-      <div
-        className="flex items-center justify-between border-b px-4 py-3 bg-bg-surface shrink-0 z-10"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <span className="text-sm font-semibold text-text-primary">Live Alerts</span>
-        {total > 0 && (
+    <section aria-label="Live alerts" className="flex w-[360px] shrink-0 flex-col overflow-hidden border-l border-border bg-bg-surface">
+      <header className="z-10 flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text-primary">Live alerts</h2>
           <span
-            className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold text-white tabular-nums"
-            style={{ backgroundColor: "var(--status-breach)" }}
+            data-testid="alert-count"
+            aria-label={`${total} ${total === 1 ? "alert" : "alerts"} listed`}
+            className={cn("flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums", total > 0 ? "bg-status-breach text-white" : "bg-bg-sunken text-text-secondary")}
           >
             {total}
           </span>
-        )}
-      </div>
+        </div>
+        <label className="flex cursor-pointer items-center justify-between gap-3 text-xs text-text-secondary">
+          Unacknowledged only
+          <button
+            type="button"
+            role="switch"
+            aria-checked={unackOnly}
+            onClick={() => onUnackOnlyChange(!unackOnly)}
+            className={cn(
+              "relative h-5 w-9 shrink-0 rounded-full border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand/40",
+              unackOnly ? "border-brand bg-brand" : "border-border bg-bg-sunken",
+            )}
+          >
+            <span aria-hidden className={cn("absolute top-0.5 h-3.5 w-3.5 rounded-full bg-bg-surface shadow-sm transition-[left]", unackOnly ? "left-[18px]" : "left-0.5")} />
+          </button>
+        </label>
+      </header>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div className="flex flex-col gap-px p-0">
+          <div role="status" aria-label="Loading alerts" className="flex flex-col">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[88px] animate-pulse" style={{ backgroundColor: "var(--bg-sunken)" }} />
+              <div key={i} className="flex flex-col gap-2 border-b border-border p-3">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
             ))}
           </div>
         )}
 
-        {!loading && alerts.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-40 gap-2">
-            <CheckCircle size={24} strokeWidth={1.5} style={{ color: "var(--status-inside)" }} />
-            <p className="text-sm text-text-secondary">All clear</p>
-          </div>
+        {!loading && failed && <ErrorState what="The alerts could not be loaded." onRetry={onRetry ?? (() => {})} />}
+
+        {!loading && !failed && alerts.length === 0 && (
+          <EmptyState
+            icon={<CheckCircle size={20} strokeWidth={1.5} className="text-status-inside-text" />}
+            title={unackOnly ? "Nothing unacknowledged in this view." : "No open alerts in this view."}
+            action={{ label: "See all alerts", href: "/alerts" }}
+          />
         )}
 
-        {!loading && alerts.map((alert) => (
-          <AlertCard
+        {!loading && !failed && alerts.map((alert) => (
+          <AlertFeedItem
             key={alert.id}
             alert={alert}
-            selectedAnimalId={selectedId}
-            onSelectAnimal={onSelectAnimal}
+            selected={selectedId === alert.animal_id}
+            canAcknowledge={canAcknowledge}
+            onOpen={onSelectAnimal}
             onAcknowledge={onAcknowledge}
-            onFlyTo={onFlyTo}
+            onLocate={onFlyTo}
+            onAssign={canAssign ? onAssign : undefined}
+            onResolve={canResolve ? onResolve : undefined}
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

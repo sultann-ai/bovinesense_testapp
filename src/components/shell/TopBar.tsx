@@ -1,310 +1,164 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search, Bell, ChevronDown, CheckCircle, ShieldAlert, AlertTriangle, Truck, WifiOff } from "lucide-react";
+import { useRef } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Bell, Check, ChevronDown, LogOut } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import * as Select from "@radix-ui/react-select";
 import { cn } from "@/lib/utils";
+import { ROLE_LABELS, ROLE_SHORT_LABELS, type AppRole } from "@/lib/permissions";
+import { initialsOfName } from "@/lib/branding";
+import { LiveIndicator } from "@/components/realtime/LiveIndicator";
+import { useLive } from "@/components/realtime/RealtimeProvider";
+import { GlobalSearch } from "./GlobalSearch";
+import { ScopeSelector } from "./ScopeSelector";
+import { TenantLogo } from "./TenantLogo";
+import { useTenant } from "./TenantProvider";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type AnimalStatus = "inside" | "near" | "breach" | "fast" | "stale";
-
-interface SearchResult {
-  animal_id: number;
-  animal_name: string | null;
-  status: AnimalStatus;
-  tag_serial: string | null;
-  borrower_name: string | null;
-  loan_number: string | null;
-  branch_name: string;
-  lat: number | null;
-  lon: number | null;
+/**
+ * The top bar (64 px): the tenant's logo and name with "Powered by BovineSense"; one global search;
+ * the region / branch scope selector; the live status; the alert bell with the live count; the user
+ * menu with the person's role and the organization switcher.
+ */
+export interface SwitchableOrganization {
+  id: string;
+  name: string;
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+interface TopBarProps {
+  user: { name: string | null; email: string | null };
+  role: AppRole;
+  activeOrganizationId: string;
+  /** Organizations the user may switch to (the menu offers the switcher when there is more than one). */
+  organizations: SwitchableOrganization[];
+}
 
-const ROLES = [
-  { value: "hq_admin",          label: "HQ Admin" },
-  { value: "regional_manager",  label: "Regional Manager" },
-  { value: "branch_officer",    label: "Branch Officer" },
-  { value: "auditor",           label: "Auditor" },
-] as const;
+function initialsOf(name: string | null, email: string | null): string {
+  const source = (name ?? "").trim() || (email ?? "").split("@")[0] || "?";
+  return initialsOfName(source.replace(/[._-]+/g, " "));
+}
 
-const REGIONS  = ["All Regions",  "Lahore", "Rawalpindi", "Faisalabad", "Multan", "Gujranwala"];
-const BRANCHES = ["All Branches", "Main Branch", "Gulberg", "DHA", "Cantt"];
+export function TopBar({ user, role, activeOrganizationId, organizations }: TopBarProps) {
+  const tenant = useTenant();
+  const { newAlertCount: alertCount } = useLive();
+  const pathname = usePathname();
+  const signOutForm = useRef<HTMLFormElement>(null);
+  const switchForm = useRef<HTMLFormElement>(null);
+  const switchTarget = useRef<HTMLInputElement>(null);
 
-const STATUS_ICONS: Record<AnimalStatus, React.ElementType> = {
-  inside: CheckCircle,
-  near:   AlertTriangle,
-  breach: ShieldAlert,
-  fast:   Truck,
-  stale:  WifiOff,
-};
+  const displayName = user.name?.trim() || user.email || "Signed in";
+  const canSwitch = organizations.length > 1;
 
-const STATUS_COLOR: Record<AnimalStatus, string> = {
-  inside: "var(--status-inside)",
-  near:   "var(--status-near)",
-  breach: "var(--status-breach)",
-  fast:   "var(--status-fast)",
-  stale:  "var(--status-stale)",
-};
-
-// ─── Search dropdown ──────────────────────────────────────────────────────────
-
-function GlobalSearch() {
-  const router = useRouter();
-  const [q,        setQ]        = useState("");
-  const [results,  setResults]  = useState<SearchResult[]>([]);
-  const [loading,  setLoading]  = useState(false);
-  const [open,     setOpen]     = useState(false);
-  const debRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Debounce search
-  useEffect(() => {
-    if (debRef.current) clearTimeout(debRef.current);
-    if (q.length < 2) { setResults([]); setOpen(false); return; }
-    debRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const rows = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then((r) => r.json());
-        setResults(Array.isArray(rows) ? rows : []);
-        setOpen(rows?.length > 0);
-      } catch { setResults([]); }
-      finally { setLoading(false); }
-    }, 250);
-    return () => { if (debRef.current) clearTimeout(debRef.current); };
-  }, [q]);
-
-  function select(result: SearchResult) {
-    setQ("");
-    setResults([]);
-    setOpen(false);
-    // Navigate to overview with animal param to fly-to + open drawer
-    router.push(`/?animal=${result.animal_id}`);
+  function switchTo(id: string) {
+    if (id === activeOrganizationId || !switchTarget.current) return;
+    switchTarget.current.value = id;
+    switchForm.current?.requestSubmit();
   }
 
   return (
-    <div ref={wrapperRef} className="relative flex-1 max-w-sm">
-      {loading ? (
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-transparent animate-spin"
-          style={{ borderTopColor: "var(--text-secondary)" }} />
-      ) : (
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
-      )}
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onFocus={() => { if (results.length > 0) setOpen(true); }}
-        placeholder="Search tag ID, loan ID, borrower…"
-        className={cn(
-          "w-full rounded-[var(--radius-sm)] border border-border bg-bg-sunken",
-          "pl-9 pr-3 py-[7px] text-sm text-text-primary placeholder:text-text-secondary",
-          "outline-none focus:border-brand focus:ring-1 focus:ring-brand/30 transition-colors",
-        )}
-      />
+    <header data-testid="topbar" className="z-20 flex h-16 shrink-0 items-center gap-4 border-b border-border bg-bg-surface px-6">
+      {/* Sign-out and organization switching are plain form POSTs (303 back into the app) */}
+      <form ref={signOutForm} method="post" action="/auth/signout" className="hidden" />
+      <form ref={switchForm} method="post" action="/org/select" className="hidden">
+        <input ref={switchTarget} type="hidden" name="organization_id" defaultValue="" />
+        <input type="hidden" name="next" value={pathname} readOnly />
+      </form>
 
-      {/* Dropdown */}
-      {open && results.length > 0 && (
-        <div
-          className="absolute left-0 right-0 top-full mt-1 z-50 overflow-hidden rounded-[var(--radius-md)] border shadow-[var(--shadow-float)]"
-          style={{ backgroundColor: "var(--bg-surface)", borderColor: "var(--border)" }}
-        >
-          {results.map((r) => {
-            const Icon = STATUS_ICONS[r.status];
-            return (
-              <button
-                key={r.animal_id}
-                onMouseDown={() => select(r)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-bg-sunken"
-              >
-                <Icon size={14} strokeWidth={1.5} style={{ color: STATUS_COLOR[r.status], flexShrink: 0 }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    {r.tag_serial && (
-                      <span className="font-mono-ids text-xs text-text-primary">{r.tag_serial}</span>
-                    )}
-                    {r.borrower_name && (
-                      <span className="text-xs text-text-primary truncate">{r.borrower_name}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {r.loan_number && (
-                      <span className="font-mono-ids text-[10px] text-text-secondary">{r.loan_number}</span>
-                    )}
-                    <span className="text-[10px] text-text-secondary">{r.branch_name}</span>
-                  </div>
-                </div>
-                <span
-                  className="text-[10px] font-medium capitalize shrink-0"
-                  style={{ color: STATUS_COLOR[r.status] }}
-                >
-                  {r.status}
-                </span>
-              </button>
-            );
-          })}
+      {/* The tenant, powered by the product */}
+      <div className="flex shrink-0 items-center gap-3" data-testid="tenant-brand">
+        <TenantLogo name={tenant.name} logoUrl={tenant.logoUrl} />
+        <div className="leading-tight">
+          <div className="text-sm font-semibold text-text-primary" data-testid="tenant-name">{tenant.name}</div>
+          <div className="text-xs text-text-secondary">Powered by BovineSense</div>
         </div>
-      )}
-    </div>
-  );
-}
-
-// ─── TopBar ───────────────────────────────────────────────────────────────────
-
-export function TopBar() {
-  const [role,       setRole]       = useState<string>("hq_admin");
-  const [alertCount]                = useState(3);
-
-  const currentRole = ROLES.find((r) => r.value === role);
-
-  return (
-    <header className="flex h-16 items-center gap-4 border-b border-border bg-bg-surface px-6 shrink-0 z-20">
-      {/* Brand */}
-      <div className="flex items-center gap-2 text-sm shrink-0">
-        <span className="font-semibold text-text-primary">Bank of Punjab</span>
-        <span className="text-text-secondary">·</span>
-        <span className="text-text-secondary text-xs">Powered by Bovine</span>
       </div>
 
-      <div className="h-5 w-px bg-border mx-1" />
+      <div aria-hidden className="mx-1 h-6 w-px bg-border" />
 
-      {/* Global search */}
       <GlobalSearch />
-
-      {/* Region / Branch selector */}
-      <div className="flex items-center gap-2 shrink-0">
-        <RegionSelect />
-        <BranchSelect />
-      </div>
+      <ScopeSelector />
 
       <div className="flex-1" />
 
-      {/* Alert bell */}
-      <button
-        className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-bg-sunken hover:text-text-primary transition-colors"
-        aria-label={`${alertCount} unread alerts`}
+      <LiveIndicator />
+
+      {/* Alert bell: the number of open alerts in the current scope, live; opens the Alerts screen */}
+      <Link
+        href="/alerts"
+        data-testid="bell"
+        className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-text-secondary outline-none transition-colors hover:bg-bg-sunken hover:text-text-primary focus-visible:ring-2 focus-visible:ring-brand/40"
+        aria-label={alertCount === 1 ? "1 open alert" : `${alertCount} open alerts`}
       >
         <Bell size={20} strokeWidth={1.5} />
         {alertCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-status-breach" />
+          <span
+            data-testid="bell-badge"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-breach px-1 text-[10px] font-semibold tabular-nums text-white"
+          >
+            {alertCount > 99 ? "99+" : alertCount}
+          </span>
         )}
-      </button>
+      </Link>
 
-      {/* User menu */}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button className={cn(
-            "flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-1.5",
-            "border border-border bg-bg-surface text-sm text-text-primary",
-            "hover:bg-bg-sunken transition-colors outline-none focus:ring-1 focus:ring-brand/30",
-          )}>
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-white text-xs font-semibold">
-              M
-            </div>
-            <span className="font-medium">{currentRole?.label}</span>
-            <ChevronDown size={14} className="text-text-secondary" />
+          <button
+            aria-label="Account menu"
+            className={cn(
+              "flex h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-border bg-bg-surface px-3 text-sm text-text-primary",
+              "outline-none transition-colors hover:bg-bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40",
+            )}
+          >
+            <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-tint text-xs font-semibold text-brand-hover">{initialsOf(user.name, user.email)}</span>
+            <span className="flex min-w-0 flex-col items-start text-left leading-tight">
+              <span data-testid="account-name" className="max-w-[160px] truncate text-sm font-medium">{displayName}</span>
+              <span data-testid="account-role" className="text-[11px] text-text-secondary">{ROLE_SHORT_LABELS[role]}</span>
+            </span>
+            <ChevronDown size={14} strokeWidth={1.5} className="text-text-secondary" />
           </button>
         </DropdownMenu.Trigger>
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            className={cn(
-              "z-50 min-w-[200px] rounded-[var(--radius-md)] border border-border bg-bg-surface",
-              "shadow-[var(--shadow-float)] p-1",
-              "animate-in fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2",
-            )}
+            className="z-50 min-w-[260px] rounded-[var(--radius-md)] border border-border bg-bg-surface p-1 shadow-[var(--shadow-float)]"
             sideOffset={6}
             align="end"
           >
-            <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
-              Switch Role
+            <div className="px-2 py-2" data-testid="account-summary">
+              <div className="truncate text-sm font-medium text-text-primary">{displayName}</div>
+              {user.name && user.email && <div className="truncate text-xs text-text-secondary">{user.email}</div>}
+              <div className="mt-1 truncate text-xs text-text-secondary">{ROLE_LABELS[role]} · {tenant.name}</div>
             </div>
-            {ROLES.map((r) => (
-              <DropdownMenu.Item
-                key={r.value}
-                onSelect={() => setRole(r.value)}
-                className={cn(
-                  "flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] px-2 py-2 text-sm outline-none",
-                  "text-text-primary hover:bg-bg-sunken transition-colors",
-                  role === r.value && "bg-brand-tint text-brand font-medium",
-                )}
-              >
-                <span className={cn("h-1.5 w-1.5 rounded-full", role === r.value ? "bg-brand" : "")} />
-                {r.label}
-              </DropdownMenu.Item>
-            ))}
+
+            {canSwitch && (
+              <>
+                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                <DropdownMenu.Label className="px-2 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">Switch organization</DropdownMenu.Label>
+                {organizations.map((o) => (
+                  <DropdownMenu.Item
+                    key={o.id}
+                    onSelect={() => switchTo(o.id)}
+                    data-testid={`switch-org-${o.id}`}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-sm)] px-2 py-2 text-sm text-text-primary outline-none data-[highlighted]:bg-bg-sunken"
+                  >
+                    <span className="truncate">{o.name}</span>
+                    {o.id === activeOrganizationId && <Check size={14} strokeWidth={1.5} aria-label="Current organization" className="text-brand-hover" />}
+                  </DropdownMenu.Item>
+                ))}
+              </>
+            )}
+
             <DropdownMenu.Separator className="my-1 h-px bg-border" />
-            <DropdownMenu.Item className="flex cursor-pointer items-center rounded-[var(--radius-sm)] px-2 py-2 text-sm text-text-secondary hover:bg-bg-sunken hover:text-text-primary outline-none transition-colors">
+            <DropdownMenu.Item
+              onSelect={() => signOutForm.current?.requestSubmit()}
+              className="flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] px-2 py-2 text-sm text-text-secondary outline-none data-[highlighted]:bg-bg-sunken data-[highlighted]:text-text-primary"
+            >
+              <LogOut size={14} strokeWidth={1.5} />
               Sign out
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
     </header>
-  );
-}
-
-function RegionSelect() {
-  return (
-    <Select.Root defaultValue="All Regions">
-      <Select.Trigger className={cn(
-        "flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-bg-surface px-3",
-        "text-sm text-text-primary outline-none hover:bg-bg-sunken transition-colors focus:ring-1 focus:ring-brand/30",
-      )}>
-        <Select.Value />
-        <Select.Icon><ChevronDown size={12} className="text-text-secondary" /></Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content className="z-50 overflow-hidden rounded-[var(--radius-md)] border border-border bg-bg-surface shadow-[var(--shadow-float)]">
-          <Select.Viewport className="p-1">
-            {REGIONS.map((r) => (
-              <Select.Item key={r} value={r} className="flex cursor-pointer items-center rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-text-primary outline-none hover:bg-bg-sunken transition-colors">
-                <Select.ItemText>{r}</Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
-  );
-}
-
-function BranchSelect() {
-  return (
-    <Select.Root defaultValue="All Branches">
-      <Select.Trigger className={cn(
-        "flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-bg-surface px-3",
-        "text-sm text-text-primary outline-none hover:bg-bg-sunken transition-colors focus:ring-1 focus:ring-brand/30",
-      )}>
-        <Select.Value />
-        <Select.Icon><ChevronDown size={12} className="text-text-secondary" /></Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content className="z-50 overflow-hidden rounded-[var(--radius-md)] border border-border bg-bg-surface shadow-[var(--shadow-float)]">
-          <Select.Viewport className="p-1">
-            {BRANCHES.map((b) => (
-              <Select.Item key={b} value={b} className="flex cursor-pointer items-center rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-text-primary outline-none hover:bg-bg-sunken transition-colors">
-                <Select.ItemText>{b}</Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
   );
 }

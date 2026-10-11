@@ -10,7 +10,7 @@ import {
   LOW_BATTERY_THRESHOLD,
   type SpatialContext,
   type AlertFixContext,
-} from "../db/alert-rules";
+} from "../src/lib/alerts/alert-rules";
 
 // ─── Helper builders ──────────────────────────────────────────────────────────
 function spatial(overrides: Partial<SpatialContext> = {}): SpatialContext {

@@ -1,54 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { requireApiAccess, scopeMatch } from "@/lib/auth/api";
+import { Constants } from "@/types/database";
+import { clampInt, dateParam, enumParam, intParam } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-  const type     = sp.get("type");
-  const severity = sp.get("severity");
-  const status   = sp.get("status");
-  const branchId = sp.get("branch_id");
-  const fromDate = sp.get("from_date");
-  const toDate   = sp.get("to_date");
-  const limit    = Math.min(Number(sp.get("limit") ?? 100), 200);
-  const offset   = Number(sp.get("offset") ?? 0);
+  const auth = await requireApiAccess();
+  if (!auth.ok) return auth.response;
+  const { ctx } = auth;
+
+  const sp       = req.nextUrl.searchParams;
+  const type     = enumParam(sp.get("type"), Constants.public.Enums.alert_type);
+  const severity = enumParam(sp.get("severity"), Constants.public.Enums.alert_severity);
+  const status   = enumParam(sp.get("status"), Constants.public.Enums.alert_status);
+  const regionId = intParam(sp.get("region_id"));
+  const branchId = intParam(sp.get("branch_id"));
+  const fromDate = dateParam(sp.get("from_date"));
+  const toDate   = dateParam(sp.get("to_date"));
+  const limit    = clampInt(sp.get("limit"), 100, 1, 200);
+  const offset   = clampInt(sp.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
+
+  if (
+    !type.ok || !severity.ok || !status.ok ||
+    Number.isNaN(regionId) || Number.isNaN(branchId) || fromDate === undefined || toDate === undefined
+  ) {
+    return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
+  }
 
   try {
-    const rows = await sql`
-      SELECT
-        al.id, al.type, al.severity, al.status,
-        al.title, al.detail, al.distance_km,
-        al.created_at, al.acknowledged_at, al.assigned_at, al.resolved_at,
-        al.resolution_reason, al.resolution_note,
-        a.id         AS animal_id,
-        a.name       AS animal_name,
-        t.serial_number AS tag_serial,
-        bo.name      AS borrower_name,
-        l.loan_number,
-        br.id        AS branch_id,
-        br.name      AS branch_name
-      FROM   alerts   al
-      JOIN   animals  a   ON a.id  = al.animal_id
-      LEFT JOIN tags  t   ON t.id  = al.tag_id
-      LEFT JOIN borrowers bo ON bo.id = a.borrower_id
-      LEFT JOIN loans l   ON l.id  = a.loan_id
-      JOIN   branches br  ON br.id = a.branch_id
-      WHERE  (${type}::text     IS NULL OR al.type     = ${type}::alert_type)
-        AND  (${severity}::text IS NULL OR al.severity = ${severity}::alert_severity)
-        AND  (${status}::text   IS NULL OR al.status   = ${status}::alert_status)
-        AND  (${branchId}::int  IS NULL OR br.id       = ${branchId}::int)
-        AND  (${fromDate}::date IS NULL OR al.created_at >= ${fromDate}::timestamptz)
-        AND  (${toDate}::date   IS NULL OR al.created_at <= (${toDate}::date + INTERVAL '1 day'))
-      ORDER BY
-        CASE al.status   WHEN 'new' THEN 0 WHEN 'acknowledged' THEN 1 WHEN 'assigned' THEN 2 ELSE 3 END,
-        CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
-        al.created_at DESC
-      LIMIT  ${limit}
-      OFFSET ${offset}
-    `;
+    let query = ctx.db
+      .from("alert_overview")
+      .select(
+        "id, type, severity, status, title, detail, distance_km, created_at, acknowledged_at, assigned_at, resolved_at, resolution_reason, resolution_note, animal_id, animal_name, tag_serial, borrower_name, loan_number, branch_id, branch_name",
+      )
+      .match(scopeMatch(ctx));
 
-    return NextResponse.json(rows);
+    if (type.value)     query = query.eq("type", type.value);
+    if (severity.value) query = query.eq("severity", severity.value);
+    if (status.value)   query = query.eq("status", status.value);
+    if (regionId !== null) query = query.eq("region_id", regionId);
+    if (branchId !== null) query = query.eq("branch_id", branchId);
+    if (fromDate) query = query.gte("created_at", fromDate.toISOString());
+    if (toDate) {
+      // Inclusive of the whole "to" day, as before.
+      const end = new Date(toDate.getTime() + 24 * 60 * 60 * 1000);
+      query = query.lte("created_at", end.toISOString());
+    }
+
+    const { data, error } = await query
+      .order("status_rank", { ascending: true })
+      .order("severity_rank", { ascending: true })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[api/alerts]", err);
     return NextResponse.json([], { status: 503 });

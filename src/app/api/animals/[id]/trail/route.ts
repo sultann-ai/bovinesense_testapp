@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { requireApiAccess, scopeMatch } from "@/lib/auth/api";
+import { clampInt } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -7,34 +8,50 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireApiAccess();
+  if (!auth.ok) return auth.response;
+  const { ctx } = auth;
+
   const { id } = await params;
   const animalId = parseInt(id, 10);
   if (isNaN(animalId)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  const hours = Math.min(
-    parseInt(req.nextUrl.searchParams.get("hours") ?? "24", 10),
-    168, // max 7 days
-  );
+  // 1 h … 7 days, default 24 h
+  const hours = clampInt(req.nextUrl.searchParams.get("hours"), 24, 1, 168);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   try {
-    const fixes = await sql`
-      SELECT id, lat, lon, fixed_at, speed_kmh, battery_pct
-      FROM   fixes
-      WHERE  animal_id  = ${animalId}
-        AND  fixed_at  >= NOW() - make_interval(hours => ${hours})
-      ORDER  BY fixed_at ASC
-      LIMIT  2000
-    `;
+    // The animal must be inside the caller's organization / region / branch.
+    const { data: animal, error: animalError } = await ctx.db
+      .from("animal_overview")
+      .select("id")
+      .match(scopeMatch(ctx))
+      .eq("id", animalId)
+      .maybeSingle();
+    if (animalError) throw animalError;
+    if (!animal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const { data: fixes, error } = await ctx.db
+      .from("fixes")
+      .select("id, lat, lon, fixed_at, speed_kmh, battery_pct")
+      .eq("organization_id", ctx.organizationId)
+      .eq("animal_id", animalId)
+      .gte("fixed_at", since)
+      // Newest first so the 1000-row cap (Supabase's default max_rows) drops the
+      // oldest points, not the latest ones; reversed again below.
+      .order("fixed_at", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
 
     const geojson = {
       type: "FeatureCollection" as const,
-      features: fixes.map((f) => ({
+      features: [...fixes].reverse().map((f) => ({
         type: "Feature" as const,
         geometry: {
           type: "Point" as const,
-          coordinates: [f.lon as number, f.lat as number],
+          coordinates: [f.lon, f.lat],
         },
         properties: {
           id:          f.id,
